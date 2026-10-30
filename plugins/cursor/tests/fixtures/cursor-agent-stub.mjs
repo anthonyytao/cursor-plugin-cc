@@ -14,6 +14,16 @@ if (process.argv[2] === 'status') {
   process.exit(0);
 }
 
+if (process.env.CURSOR_AGENT_STUB_ARGS_OUT) {
+  writeFileSync(process.env.CURSOR_AGENT_STUB_ARGS_OUT, JSON.stringify(process.argv.slice(2)));
+}
+if (process.env.CURSOR_AGENT_STUB_ENV_OUT) {
+  writeFileSync(
+    process.env.CURSOR_AGENT_STUB_ENV_OUT,
+    JSON.stringify(process.env.CURSOR_CONFIG_DIR ?? null),
+  );
+}
+
 // Like the real cursor-agent in print mode, the prompt arrives on stdin.
 // CURSOR_AGENT_STUB_PROMPT_OUT lets tests assert what was received.
 let prompt = '';

@@ -12,14 +12,14 @@ Small slices give Composer a tight scope, make the diff reviewable, and make fai
 
 ## Pick a model
 
-Default is `composer-2.5-fast` — Cursor's own current default and the fastest Composer variant. Escalate only when the task warrants it:
+Default is `composer-2.5`. Choose another model only when the task warrants it:
 
-- `composer-2.5` (non-fast) — quality matters slightly more than latency, but the task is still well-scoped.
+- `composer-2.5-fast` — latency matters more than price; Cursor bills the fast variant higher.
 - `sonnet` (`claude-4.6-sonnet-medium`) — more than ~5 files touched, or moderate architecture changes.
 - `opus` (`claude-opus-4-7-high`) — cross-cutting refactor, subtle correctness, or a prior `composer` run failed.
 - `gpt` / `codex` (`gpt-5.3-codex`) — only when the user explicitly asks for it.
 
-Unknown aliases are forwarded as-is, so `--model <whatever>` always works. Do not escalate without a reason — `composer-2.5-fast` is the default for speed and cost.
+Unknown aliases are forwarded as-is, so `--model <whatever>` always works. Do not change models without a reason — `composer-2.5` is the default.
 
 ## Resume or fresh
 

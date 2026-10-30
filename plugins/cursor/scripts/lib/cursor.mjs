@@ -1,6 +1,16 @@
 import { spawn } from 'node:child_process';
-import { createWriteStream, existsSync, readdirSync } from 'node:fs';
-import { join, win32 } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import {
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { homedir } from 'node:os';
+import { join, resolve, win32 } from 'node:path';
 import { createInterface } from 'node:readline';
 import { parseLine } from './parse.mjs';
 import { run } from './run.mjs';
@@ -251,7 +261,8 @@ export function resolveWindowsInstall(root) {
  * @property {string=} resumeChatId
  * @property {boolean=} resumeLatest
  * @property {boolean=} cloud
- * @property {boolean=} force              Default: true.
+ * @property {boolean=} readOnly
+ * @property {boolean=} force              Default: true. Ignored for local write runs.
  * @property {boolean=} approveMcps
  */
 
@@ -265,12 +276,44 @@ export function resolveWindowsInstall(root) {
  */
 export function buildArgs(opts) {
   const args = ['-p', '--output-format', 'stream-json', '--trust', '--model', opts.model];
-  if (opts.force !== false) args.push('--force');
+  const sandboxed = !opts.readOnly && !opts.cloud;
+  // --force runs commands outside the sandbox, so a sandboxed write run never gets it.
+  if (opts.readOnly || (!sandboxed && opts.force !== false)) args.push('--force');
   if (opts.approveMcps) args.push('--approve-mcps');
   if (opts.cloud) args.push('--cloud');
   if (opts.resumeChatId) args.push(`--resume=${opts.resumeChatId}`);
   else if (opts.resumeLatest) args.push('--resume');
+  if (opts.readOnly) args.push('--mode', 'ask', '--disable-project-configs');
+  else if (sandboxed) args.push('--sandbox', 'enabled');
   return args;
+}
+
+function prepareReadOnlyConfig() {
+  const override = process.env.CURSOR_PLUGIN_CC_READONLY_CONFIG_DIR?.trim();
+  const configDir = override
+    ? resolve(override)
+    : join(homedir(), '.cache', 'cursor-plugin-cc', 'read-only');
+  const configPath = join(configDir, 'cli-config.json');
+  const temporaryPath = join(configDir, `.cli-config-${process.pid}-${randomUUID()}.tmp`);
+  const config = `${JSON.stringify({
+    version: 1,
+    permissions: { allow: [], deny: ['Write(**)', 'Shell(*)'] },
+  })}\n`;
+
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(temporaryPath, config, { mode: 0o600 });
+  renameSync(temporaryPath, configPath);
+
+  // cursor-agent stores chats under its config dir; share the default one so
+  // /cursor:resume can find a review's chat.
+  const sharedChats = join(process.env.CURSOR_CONFIG_DIR || join(homedir(), '.cursor'), 'chats');
+  mkdirSync(sharedChats, { recursive: true });
+  try {
+    symlinkSync(sharedChats, join(configDir, 'chats'));
+  } catch (error) {
+    if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'EEXIST') throw error;
+  }
+  return configDir;
 }
 
 /**
@@ -280,6 +323,7 @@ export function buildArgs(opts) {
  * @property {string=} resumeChatId
  * @property {boolean=} resumeLatest
  * @property {boolean=} cloud
+ * @property {boolean=} readOnly
  * @property {boolean=} force
  * @property {boolean=} approveMcps
  * @property {string=} cwd
@@ -302,10 +346,13 @@ export function buildArgs(opts) {
  */
 export async function runHeadless(opts) {
   const bin = await resolveBin();
+  const env = { ...process.env };
+  if (opts.readOnly) env.CURSOR_CONFIG_DIR = prepareReadOnlyConfig();
+  else delete env.CURSOR_CONFIG_DIR;
   const child = spawn(bin.command, [...bin.args, ...buildArgs(opts)], {
     cwd: opts.cwd ?? process.cwd(),
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: process.env,
+    env,
   });
   if (!child.stdin || !child.stdout || !child.stderr) {
     throw new Error('cursor-agent spawn failed: stdio not attached');

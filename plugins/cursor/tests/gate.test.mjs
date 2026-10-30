@@ -24,12 +24,14 @@ describe('stop review gate', () => {
   const prevBin = process.env.CURSOR_AGENT_BIN;
   const prevFix = process.env.CURSOR_AGENT_STUB_FIXTURE;
   const prevAuth = process.env.CURSOR_AGENT_STUB_AUTH;
+  const prevReadOnlyConfigDir = process.env.CURSOR_PLUGIN_CC_READONLY_CONFIG_DIR;
 
   beforeEach(() => {
     tmp = makeTempHome();
     stdout = '';
     stderr = '';
     process.env.CURSOR_PLUGIN_CC_HOME = tmp.dir;
+    process.env.CURSOR_PLUGIN_CC_READONLY_CONFIG_DIR = `${tmp.dir}/readonly-config`;
     process.env.CURSOR_AGENT_BIN = STUB_BIN;
     process.env.CURSOR_AGENT_STUB_FIXTURE = GATE_ALLOW_FIXTURE;
     delete process.env.CURSOR_AGENT_STUB_AUTH;
@@ -44,6 +46,9 @@ describe('stop review gate', () => {
     else process.env.CURSOR_AGENT_STUB_FIXTURE = prevFix;
     if (prevAuth === undefined) delete process.env.CURSOR_AGENT_STUB_AUTH;
     else process.env.CURSOR_AGENT_STUB_AUTH = prevAuth;
+    if (prevReadOnlyConfigDir === undefined)
+      delete process.env.CURSOR_PLUGIN_CC_READONLY_CONFIG_DIR;
+    else process.env.CURSOR_PLUGIN_CC_READONLY_CONFIG_DIR = prevReadOnlyConfigDir;
     tmp.cleanup();
   });
 
