@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { main as reviewMain, buildReviewPrompt } from '../scripts/review.mjs';
@@ -34,11 +34,14 @@ describe('review', () => {
   const prevHome = process.env.CURSOR_PLUGIN_CC_HOME;
   const prevBin = process.env.CURSOR_AGENT_BIN;
   const prevFix = process.env.CURSOR_AGENT_STUB_FIXTURE;
+  const prevArgsOut = process.env.CURSOR_AGENT_STUB_ARGS_OUT;
+  const prevReadOnlyConfigDir = process.env.CURSOR_PLUGIN_CC_READONLY_CONFIG_DIR;
   const prevCwd = process.cwd();
 
   beforeEach(() => {
     tmp = makeTempHome();
     process.env.CURSOR_PLUGIN_CC_HOME = tmp.dir;
+    process.env.CURSOR_PLUGIN_CC_READONLY_CONFIG_DIR = join(tmp.dir, 'readonly-config');
     process.env.CURSOR_AGENT_BIN = STUB_BIN;
     process.env.CURSOR_AGENT_STUB_FIXTURE = REVIEW_HAPPY_FIXTURE;
     process.chdir(tmp.dir);
@@ -52,6 +55,11 @@ describe('review', () => {
     else process.env.CURSOR_AGENT_BIN = prevBin;
     if (prevFix === undefined) delete process.env.CURSOR_AGENT_STUB_FIXTURE;
     else process.env.CURSOR_AGENT_STUB_FIXTURE = prevFix;
+    if (prevArgsOut === undefined) delete process.env.CURSOR_AGENT_STUB_ARGS_OUT;
+    else process.env.CURSOR_AGENT_STUB_ARGS_OUT = prevArgsOut;
+    if (prevReadOnlyConfigDir === undefined)
+      delete process.env.CURSOR_PLUGIN_CC_READONLY_CONFIG_DIR;
+    else process.env.CURSOR_PLUGIN_CC_READONLY_CONFIG_DIR = prevReadOnlyConfigDir;
     tmp.cleanup();
   });
 
@@ -83,6 +91,8 @@ describe('review', () => {
   });
 
   it('happy path: working-tree diff → status done with the review verbatim', async () => {
+    const argsPath = join(tmp.dir, 'review-args.json');
+    process.env.CURSOR_AGENT_STUB_ARGS_OUT = argsPath;
     initRepo(tmp.dir);
     writeFileSync(join(tmp.dir, 'foo.ts'), 'export const foo = 42;\n');
     writeFileSync(join(tmp.dir, 'bar.ts'), 'export const bar = true;\n');
@@ -96,6 +106,11 @@ describe('review', () => {
     const jobs = listJobs(tmp.dir);
     expect(jobs.length).toBe(1);
     const job = jobs[0];
+    const args = JSON.parse(readFileSync(argsPath, 'utf8'));
+    expect(args).toContain('--mode');
+    expect(args).toContain('ask');
+    expect(args).toContain('--force');
+    expect(args).not.toContain('--sandbox');
     expect(job.status).toBe('done');
     expect(job.prompt).toContain('REVIEW');
     expect(job.cursorChatId).toBe('chat_review_001');

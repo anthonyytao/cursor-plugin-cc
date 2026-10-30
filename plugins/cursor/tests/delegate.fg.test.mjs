@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { main as delegateMain } from '../scripts/delegate.mjs';
 import { listJobs } from '../scripts/lib/jobs.mjs';
@@ -9,6 +11,7 @@ describe('delegate foreground', () => {
   const prevHome = process.env.CURSOR_PLUGIN_CC_HOME;
   const prevBin = process.env.CURSOR_AGENT_BIN;
   const prevFix = process.env.CURSOR_AGENT_STUB_FIXTURE;
+  const prevArgsOut = process.env.CURSOR_AGENT_STUB_ARGS_OUT;
   const prevCwd = process.cwd();
 
   beforeEach(() => {
@@ -27,10 +30,14 @@ describe('delegate foreground', () => {
     else process.env.CURSOR_AGENT_BIN = prevBin;
     if (prevFix === undefined) delete process.env.CURSOR_AGENT_STUB_FIXTURE;
     else process.env.CURSOR_AGENT_STUB_FIXTURE = prevFix;
+    if (prevArgsOut === undefined) delete process.env.CURSOR_AGENT_STUB_ARGS_OUT;
+    else process.env.CURSOR_AGENT_STUB_ARGS_OUT = prevArgsOut;
     tmp.cleanup();
   });
 
   it('runs to completion and records a finished job', async () => {
+    const argsPath = join(tmp.dir, 'delegate-args.json');
+    process.env.CURSOR_AGENT_STUB_ARGS_OUT = argsPath;
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     try {
       const code = await delegateMain([
@@ -47,10 +54,30 @@ describe('delegate foreground', () => {
     const jobs = listJobs(tmp.dir);
     expect(jobs.length).toBe(1);
     const job = jobs[0];
+    const args = JSON.parse(readFileSync(argsPath, 'utf8'));
+    expect(args).toContain('--sandbox');
+    expect(args).toContain('enabled');
+    expect(args).not.toContain('--mode');
     expect(job.status).toBe('done');
     expect(job.model).toBe('composer-2.5-fast');
     expect(job.cursorChatId).toBe('chat_abc123');
     expect(job.filesTouched?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it('does not sandbox cloud delegates', async () => {
+    const argsPath = join(tmp.dir, 'cloud-delegate-args.json');
+    process.env.CURSOR_AGENT_STUB_ARGS_OUT = argsPath;
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    try {
+      const code = await delegateMain(['--no-git-check', '--cloud', '--', 'hello world task']);
+      expect(code).toBe(0);
+    } finally {
+      writeSpy.mockRestore();
+    }
+    const args = JSON.parse(readFileSync(argsPath, 'utf8'));
+    expect(args).toContain('--cloud');
+    expect(args).not.toContain('--sandbox');
+    expect(args).not.toContain('--mode');
   });
 
   it('refuses outside a git repo without --no-git-check', async () => {

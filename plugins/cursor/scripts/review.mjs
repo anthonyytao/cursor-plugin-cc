@@ -100,6 +100,7 @@ async function runReview({ flags, context, jobId, root, onEvent }) {
     prompt,
     model,
     cloud: false,
+    readOnly: true,
     force: flags.force,
     timeoutSec: flags.timeout,
     logPath,
@@ -227,9 +228,7 @@ async function runWorker(jobId, flags, root) {
  */
 export async function main(rawArgv) {
   const flags = parseFlags(collapsePromptArgv(rawArgv, BOOLEAN_FLAGS));
-  // `cursor-agent --force` auto-approves any read tool the reviewer wants to
-  // run for extra context; the prompt forbids writes and a post-flight check
-  // flags any file the run touched anyway.
+  // The CLI permission deny list refuses writes and shell commands; ask mode only steers the model.
   flags.force = true;
 
   if (flags.worker) {

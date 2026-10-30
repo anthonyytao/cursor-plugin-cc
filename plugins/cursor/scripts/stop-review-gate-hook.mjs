@@ -80,6 +80,7 @@ async function runGateReview(input, root) {
     prompt,
     model: resolveModel(undefined),
     cloud: false,
+    readOnly: true,
     force: true,
     timeoutSec: GATE_TIMEOUT_SEC,
     logPath: rawLogPath(root, `gate-${newId(8)}`),
