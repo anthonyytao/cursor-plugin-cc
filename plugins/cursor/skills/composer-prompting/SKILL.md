@@ -31,6 +31,6 @@ Before writing the prompt, use `Read` (only) to check the target repo for:
 1. Ground the prompt in the target repo's conventions and verify commands.
 2. Write the five sections plus the guardrails block, in order (see prompt-anatomy).
 3. Chunk anything bigger than one reviewable slice (see model-selection).
-4. Pick the smallest model that fits; default to `composer-2.5-fast`.
+4. Pick the smallest model that fits; default to `composer-2.5`.
 5. Decide resume vs fresh.
 6. Remove redundant instructions before sending.

@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished } from 'vitest';
 import { buildArgs, resolveModel, runHeadless } from '../scripts/lib/cursor.mjs';
 import { extractChatId, summariseEvents } from '../scripts/lib/parse.mjs';
 import { HAPPY_FIXTURE, STUB_BIN, makeTempHome } from './helpers.mjs';
@@ -16,6 +16,7 @@ describe('buildArgs', () => {
     expect(args).toContain('--sandbox');
     expect(args).toContain('enabled');
     expect(args).not.toContain('--mode');
+    expect(args).not.toContain('--force');
   });
 
   it('never puts the prompt on the command line (Windows 32k argv limit, #26)', () => {
@@ -23,8 +24,8 @@ describe('buildArgs', () => {
     expect(args).not.toContain('hi');
   });
 
-  it('omits --force when force=false', () => {
-    const args = buildArgs({ prompt: 'hi', model: 'auto', force: false });
+  it('omits --force on a cloud run when force=false', () => {
+    const args = buildArgs({ prompt: 'hi', model: 'auto', cloud: true, force: false });
     expect(args).not.toContain('--force');
   });
 
@@ -166,6 +167,12 @@ describe('runHeadless against stub binary', () => {
     const envPath = `${tmp.dir}/child-env.json`;
     const argsPath = `${tmp.dir}/child-args.json`;
     const configDir = `${tmp.dir}/readonly-config`;
+    const previousConfigDir = process.env.CURSOR_CONFIG_DIR;
+    process.env.CURSOR_CONFIG_DIR = `${tmp.dir}/shared-config`;
+    onTestFinished(() => {
+      if (previousConfigDir === undefined) delete process.env.CURSOR_CONFIG_DIR;
+      else process.env.CURSOR_CONFIG_DIR = previousConfigDir;
+    });
     process.env.CURSOR_AGENT_STUB_ENV_OUT = envPath;
     process.env.CURSOR_AGENT_STUB_ARGS_OUT = argsPath;
     const result = await runHeadless({
@@ -187,6 +194,7 @@ describe('runHeadless against stub binary', () => {
       permissions: { allow: [], deny: ['Write(**)', 'Shell(*)'] },
     };
     expect(JSON.parse(readFileSync(configPath, 'utf8'))).toEqual(denyList);
+    expect(realpathSync(`${configDir}/chats`)).toBe(realpathSync(`${tmp.dir}/shared-config/chats`));
 
     writeFileSync(configPath, JSON.stringify({ version: 1, permissions: { allow: [], deny: [] } }));
     const secondResult = await runHeadless({

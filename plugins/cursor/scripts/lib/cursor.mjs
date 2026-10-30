@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readdirSync,
   renameSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -261,7 +262,7 @@ export function resolveWindowsInstall(root) {
  * @property {boolean=} resumeLatest
  * @property {boolean=} cloud
  * @property {boolean=} readOnly
- * @property {boolean=} force              Default: true.
+ * @property {boolean=} force              Default: true. Ignored for local write runs.
  * @property {boolean=} approveMcps
  */
 
@@ -275,13 +276,15 @@ export function resolveWindowsInstall(root) {
  */
 export function buildArgs(opts) {
   const args = ['-p', '--output-format', 'stream-json', '--trust', '--model', opts.model];
-  if (opts.readOnly || opts.force !== false) args.push('--force');
+  const sandboxed = !opts.readOnly && !opts.cloud;
+  // --force runs commands outside the sandbox, so a sandboxed write run never gets it.
+  if (opts.readOnly || (!sandboxed && opts.force !== false)) args.push('--force');
   if (opts.approveMcps) args.push('--approve-mcps');
   if (opts.cloud) args.push('--cloud');
   if (opts.resumeChatId) args.push(`--resume=${opts.resumeChatId}`);
   else if (opts.resumeLatest) args.push('--resume');
   if (opts.readOnly) args.push('--mode', 'ask', '--disable-project-configs');
-  else if (!opts.cloud) args.push('--sandbox', 'enabled');
+  else if (sandboxed) args.push('--sandbox', 'enabled');
   return args;
 }
 
@@ -300,6 +303,16 @@ function prepareReadOnlyConfig() {
   mkdirSync(configDir, { recursive: true });
   writeFileSync(temporaryPath, config, { mode: 0o600 });
   renameSync(temporaryPath, configPath);
+
+  // cursor-agent stores chats under its config dir; share the default one so
+  // /cursor:resume can find a review's chat.
+  const sharedChats = join(process.env.CURSOR_CONFIG_DIR || join(homedir(), '.cursor'), 'chats');
+  mkdirSync(sharedChats, { recursive: true });
+  try {
+    symlinkSync(sharedChats, join(configDir, 'chats'));
+  } catch (error) {
+    if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'EEXIST') throw error;
+  }
   return configDir;
 }
 

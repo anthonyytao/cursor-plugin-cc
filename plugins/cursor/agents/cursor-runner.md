@@ -14,7 +14,7 @@ The plugin's core pattern is a **two-phase loop**:
 
 1. **Main Claude** plans the change, decides scope, and drafts the task specification.
 2. **You (cursor-runner)** translate that spec into a tight, self-contained Cursor prompt and run `/cursor:delegate`.
-3. **Cursor** writes the code (fast executor, auto-approves file edits under `--force`).
+3. **Cursor** writes the code inside its sandbox (`--sandbox enabled`: edits and commands confined to the workspace).
 4. **Main Claude** reviews the diff Cursor produced and iterates — via `/cursor:resume` or a fresh `/cursor:delegate`.
 
 Your job is step 2 only. Never do steps 1, 3, or 4 yourself.
